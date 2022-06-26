@@ -11,6 +11,8 @@ provider "aws" {
   region = "ap-northeast-1"
 }
 
+variable "ec2_ssh_public_key" {}
+
 resource "aws_vpc" "main_vpc" {
   cidr_block = "10.0.0.0/16"
 
@@ -53,4 +55,34 @@ resource "aws_internet_gateway" "igw" {
   tags = {
     Name = "main_igw"
   }
+}
+
+data "aws_ami" "amazon-linux" {
+  most_recent = true
+  owners = ["amazon"]
+
+  filter {
+      name = "state"
+      values = ["available"]
+  }
+  filter {
+      name = "name"
+      values = ["amzn2-ami-hvm-2.0.*"]
+  }
+}
+
+resource "aws_instance" "main-ec2" {
+  ami           = data.aws_ami.amazon-linux.id
+  instance_type = "t3.micro"
+  subnet_id     = aws_subnet.public_subnet.id
+  key_name               = aws_key_pair.main-ec2-key-pair.id
+
+  tags = {
+    Name = "main-ec2"
+  }
+}
+
+resource "aws_key_pair" "main-ec2-key-pair" {
+  key_name   = "test_key"
+  public_key = file("./.ssh/${var.ec2_ssh_public_key}")
 }
