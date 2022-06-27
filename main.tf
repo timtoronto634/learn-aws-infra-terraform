@@ -77,6 +77,7 @@ resource "aws_instance" "main-ec2" {
   subnet_id     = aws_subnet.public_subnet.id
   key_name               = aws_key_pair.main-ec2-key-pair.id
   vpc_security_group_ids = [aws_security_group.main-sg.id]
+  private_ip = "10.0.1.10"
 
   tags = {
     Name = "main-ec2"
