@@ -31,6 +31,17 @@ resource "aws_subnet" "public_subnet" {
   }
 }
 
+# private_subnet is ok with default route table, since it does not connect with public network
+resource "aws_subnet" "private_subnet" {
+  vpc_id     = aws_vpc.main_vpc.id
+  cidr_block = "10.0.2.0/24"
+  availability_zone       = "ap-northeast-1a"
+
+  tags = {
+    Name = "private_subnet"
+  }
+}
+
 resource "aws_route_table" "main_route_table" {
   vpc_id = aws_vpc.main_vpc.id
 
@@ -84,6 +95,18 @@ resource "aws_instance" "main-ec2" {
   }
 }
 
+resource "aws_instance" "ec2-for-db" {
+  ami           = data.aws_ami.amazon-linux.id
+  instance_type = "t3.micro"
+  subnet_id     = aws_subnet.private_subnet.id
+  vpc_security_group_ids = [aws_security_group.dbinstance-sg.id]
+  private_ip = "10.0.2.10"
+
+  tags = {
+    Name = "ec2-for-db"
+  }
+}
+
 resource "aws_key_pair" "main-ec2-key-pair" {
   key_name   = "test_key"
   public_key = file("./.ssh/${var.ec2_ssh_public_key}")
@@ -122,6 +145,44 @@ resource "aws_security_group" "main-sg" {
     from_port        = 80
     to_port          = 80
     protocol         = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port        = 0
+    to_port          = 0
+    protocol         = "-1"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+}
+
+resource "aws_security_group" "dbinstance-sg" {
+  name        = "dbinstance-sg"
+  description = "test security_group for db ec2 instance"
+  vpc_id      = aws_vpc.main_vpc.id
+
+  ingress {
+    description      = "ssh"
+    from_port        = 22
+    to_port          = 22
+    protocol         = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description      = "mariadb"
+    from_port        = 3306
+    to_port          = 3306
+    protocol         = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description      = "ping"
+    from_port        = 8
+    to_port          = 0
+    protocol         = "icmp"
     cidr_blocks      = ["0.0.0.0/0"]
   }
 
