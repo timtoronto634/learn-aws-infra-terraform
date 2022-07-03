@@ -42,7 +42,7 @@ resource "aws_subnet" "private_subnet" {
   }
 }
 
-resource "aws_route_table" "main_route_table" {
+resource "aws_route_table" "public_subnet_route_table" {
   vpc_id = aws_vpc.main_vpc.id
 
   route {
@@ -51,13 +51,31 @@ resource "aws_route_table" "main_route_table" {
   }
 
   tags = {
-    Name = "main_route_table"
+    Name = "public_subnet_route_table"
   }
 }
 
 resource "aws_route_table_association" "rtb_subnect_association" {
   subnet_id      = aws_subnet.public_subnet.id
-  route_table_id = aws_route_table.main_route_table.id
+  route_table_id = aws_route_table.public_subnet_route_table.id
+}
+
+resource "aws_route_table" "private_subnet_route_table" {
+  vpc_id = aws_vpc.main_vpc.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_nat_gateway.nat_db.id
+  }
+
+  tags = {
+    Name = "private_subnet_route_table"
+  }
+}
+
+resource "aws_main_route_table_association" "a" {
+  vpc_id      = aws_vpc.main_vpc.id
+  route_table_id = aws_route_table.private_subnet_route_table.id
 }
 
 resource "aws_internet_gateway" "igw" {
@@ -99,6 +117,7 @@ resource "aws_instance" "ec2-for-db" {
   ami           = data.aws_ami.amazon-linux.id
   instance_type = "t3.micro"
   subnet_id     = aws_subnet.private_subnet.id
+  key_name               = aws_key_pair.main-ec2-key-pair.id
   vpc_security_group_ids = [aws_security_group.dbinstance-sg.id]
   private_ip = "10.0.2.10"
 
@@ -203,4 +222,23 @@ resource "aws_network_interface" "main-ni" {
     instance     = aws_instance.main-ec2.id
     device_index = 1
   }
+}
+
+resource "aws_nat_gateway" "nat_db" {
+  allocation_id = aws_eip.nat_ip.id
+  subnet_id     = aws_subnet.public_subnet.id
+
+  tags = {
+    Name = "NAT for database"
+  }
+
+  # To ensure proper ordering, it is recommended to add an explicit dependency
+  # on the Internet Gateway for the VPC.
+  depends_on = [aws_internet_gateway.igw]
+}
+
+resource "aws_eip" "nat_ip" {
+  vpc      = true
+
+  depends_on = [aws_internet_gateway.igw]
 }
